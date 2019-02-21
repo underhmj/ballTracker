@@ -6,6 +6,9 @@ import cv2
 import imutils
 import time
 
+def nothing(arg):
+    return
+
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video", help="path to the (optional) video file")
 ap.add_argument("-b", "--buffer", type=int, default=64, help="max buffer size")
@@ -14,6 +17,9 @@ args = vars(ap.parse_args())
 orangeLower = (0,66,147)
 orangeUpper = (77,255,255)
 pts = deque(maxlen=args["buffer"])
+
+#init windows
+cv2.namedWindow('Frame')
 
 if not args.get("video", False):
     vs = VideoStream(src=0).start()
@@ -50,12 +56,25 @@ while True:
             cv2.circle(frame, (int(x), int(y)), int(radius), (0,255,255), 2)
             cv2.circle(frame, center, 5, (0,0,255), -1)
     pts.appendleft(center)
-    
+
+    velocity0 = None
+    accel0 = None
+
     for i in range(1, len(pts)):
         if pts[i - 1] is None or pts[i] is None:
             continue
         thickness = int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
-        cv2.line(frame, pts[i - 1], pts[i], (0,0,255), thickness)
+        velocity1 = np.absolute(np.array(pts[i-1])/np.array(pts[i]))
+        if velocity0 is not None:
+            accel = velocity1/velocity0
+            if accel0 is not None:
+                delta_accel = np.absolute(accel-accel0)
+                if delta_accel[0] > 0.5 or delta_accel[1] > 0.5:
+                    cv2.line(frame, pts[i - 1], pts[i], (0,0,255), thickness)
+            else:
+                accel0 = accel
+        else:
+            velocity0 = velocity1
     
     cv2.imshow("Frame", frame)
     key = cv2.waitKey(1) & 0xFF
