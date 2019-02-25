@@ -6,20 +6,30 @@ import cv2
 import imutils
 import time
 
-def nothing(arg):
-    return
-
 ap = argparse.ArgumentParser()
-ap.add_argument("-v", "--video", help="path to the (optional) video file")
 ap.add_argument("-b", "--buffer", type=int, default=64, help="max buffer size")
+ap.add_argument("-v", "--video", help="path to video file")
 args = vars(ap.parse_args())
 
 orangeLower = (0,66,147)
 orangeUpper = (77,255,255)
-pts = deque(maxlen=args["buffer"])
 
-#init windows
-cv2.namedWindow('Frame')
+yellowLower = (22,73,62)
+yellowUpper = (55,255,255)
+
+bellPepperLow = (0,124,110)
+bellPepperHigh = (16,255,255)
+
+redCupLow = (0,114,162)
+redCupHigh = (26,255,255)
+
+pts = deque([(-99,-99)] * args["buffer"], maxlen=args["buffer"])
+counter = 0
+dX = 0
+actX = None
+actY = None
+coords = None
+dXo = None
 
 if not args.get("video", False):
     vs = VideoStream(src=0).start()
@@ -38,7 +48,7 @@ while True:
     blurred = cv2.GaussianBlur(frame,(11,11),0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     
-    mask = cv2.inRange(hsv, orangeLower, orangeUpper)
+    mask = cv2.inRange(hsv, yellowLower, yellowUpper)
     mask = cv2.erode(mask, None, iterations=2)
     mask = cv2.dilate(mask, None, iterations=2)
     
@@ -52,32 +62,32 @@ while True:
         M = cv2.moments(c)
         center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
         
-        if radius > 10:
-            cv2.circle(frame, (int(x), int(y)), int(radius), (0,255,255), 2)
-            cv2.circle(frame, center, 5, (0,0,255), -1)
-    pts.appendleft(center)
+        if radius > 8:
+            cv2.circle(frame, center, 5, (255,0,255), -1)
+            pts.appendleft(center)
 
-    velocity0 = None
-    accel0 = None
-
-    for i in range(1, len(pts)):
+    for i in np.arange(1, len(pts)):
         if pts[i - 1] is None or pts[i] is None:
             continue
-        thickness = int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
-        velocity1 = np.absolute(np.array(pts[i-1])/np.array(pts[i]))
-        if velocity0 is not None:
-            accel = velocity1/velocity0
-            if accel0 is not None:
-                delta_accel = np.absolute(accel-accel0)
-                if delta_accel[0] > 0.5 or delta_accel[1] > 0.5:
-                    cv2.line(frame, pts[i - 1], pts[i], (0,0,255), thickness)
-            else:
-                accel0 = accel
-        else:
-            velocity0 = velocity1
-    
+        
+        if counter >= 20 and i == 1 and pts[i] != (-99,-99):
+            dX = pts[-10][0] - pts[i][0]
+            dXo  = pts[-11][0] - pts[-20][0]
+            actX = pts[-10][0]
+            actY = pts[-10][1]
+            
+        cv2.line(frame, pts[i-1], pts[i], (195,0,255), 1)
+        
+    if dXo is not None and (np.sign(dX) != np.sign(dXo)):
+        coords = (actX,actY)
+    elif coords != None:
+        if coords != (-99,-99):
+            cv2.circle(frame,coords, 2, (65,255,255), 7)
+            print (coords)
+            coords = None
     cv2.imshow("Frame", frame)
     key = cv2.waitKey(1) & 0xFF
+    counter += 1
     
     if key == ord("q"):
         break
